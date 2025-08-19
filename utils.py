@@ -471,9 +471,9 @@ class PathFinder(Exploration):
         return None
 
 if __name__ == '__main__':
-    # Main execution block
+    # Example of usage
     root_path = "./assignment/dataset/"
-    sequence = 3
+    sequence = 2
 
     pf = PathFinder(root_path, sequence)
     best_path = pf.A_star()
