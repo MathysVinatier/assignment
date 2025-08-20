@@ -240,31 +240,48 @@ class Exploration:
         # Get the nodes position for visual
         pos = {node: (-coords[1], coords[0]) for node, coords in self.map_relative_position.items()}
 
-        # Define node colors
-        node_colors = []
-        for node in G.nodes:
-            if node_goal is not None and node == node_goal:
-                node_colors.append("red")
-            elif node_start is not None and node == node_start:
-                node_colors.append("green")
-            else:
-                node_colors.append("lightblue")
-
-        # Plot the nodes
         plt.figure(figsize=(6, 9))
+
+        # 1. Draw all nodes (light blue) and all edges first (background layer)
         nx.draw(
             G, pos,
             with_labels=True,
             node_size=1000,
-            node_color=node_colors,
+            node_color="lightblue",
             arrowsize=20,
-            font_size=6
+            font_size=6,
         )
 
-        # If a path is given, highlight it
+        # 2. Draw path edges (orange, on top of background)
         if list_path is not None and len(list_path) > 1:
             path_edges = [(list_path[i], list_path[i + 1]) for i in range(len(list_path) - 1)]
-            nx.draw_networkx_edges(G, pos, edgelist=path_edges, edge_color="orange", width=3, arrows=True)
+            nx.draw_networkx_edges(
+                G, pos,
+                edgelist=path_edges,
+                edge_color="orange",
+                width=3,
+                arrows=True
+            )
+
+        # 3. Draw start node (green, larger, on top)
+        if node_start is not None and node_start in G.nodes:
+            nx.draw_networkx_nodes(
+                G, pos,
+                nodelist=[node_start],
+                node_color="green",
+                node_size=1200,
+                linewidths=2
+            )
+
+        # 4. Draw goal node (red, larger, on top)
+        if node_goal is not None and node_goal in G.nodes:
+            nx.draw_networkx_nodes(
+                G, pos,
+                nodelist=[node_goal],
+                node_color="red",
+                node_size=1200,
+                linewidths=2
+            )
 
         plt.title("Nodes relationship")
         if show_plot:
@@ -397,9 +414,10 @@ class PathFinder(Exploration):
                 continue
             graph[node] = []
             for succ in successors:
+                # Only add edge if both nodes are in the explored map
                 if succ in self.map_position and node in self.map_position:
                     pos1, pos2 = self.map_position[node], self.map_position[succ]
-                    cost = np.linalg.norm(pos1 - pos2)
+                    cost = np.linalg.norm(pos1 - pos2)  # Euclidean distance as weight
                     graph[node].append((succ, cost))
         return graph
 
@@ -415,8 +433,8 @@ class PathFinder(Exploration):
         min_dist     = float("inf")
 
         for id, node_pos in self.map_position.items():
-            dist = np.linalg.norm(node_pos - pos)
-            if dist < min_dist:
+            dist = np.linalg.norm(node_pos - pos) # Euclidean norm for the closest point
+            if dist < min_dist: # Get the ID of the closest point
                 min_dist     = dist
                 closest_node = id
 
@@ -438,41 +456,53 @@ class PathFinder(Exploration):
         Returns:
             list: Sequence of node IDs forming optimal path
         """
+        # Find the closest nodes to the start and goal positions
         self.start_node = self.get_closest_node(self.start_pos)
         self.goal_node  = self.get_closest_node(self.goal_pos)
         print(f"\nStarting at node {self.start_node} ({int(self.start_pos[0])}, {int(self.start_pos[1])}) to node {self.goal_node} ({self.goal_pos[0]}, {self.goal_pos[1]})")
 
+        # Get the weighted graph
         graph = self.build_graph()
 
+        # Initialize the open list as a priority queue (min-heap) for A*
         open_list = []
+        # Push the start node with its heuristic value (estimated cost to goal)
         heapq.heappush(open_list, (self.heuristic(self.start_node), self.start_node))
+        # Dictionary to track the best previous node for each visited node
         came_from = {}
+        # Cost from start node to each node (g_score)
         g_score = {self.start_node: 0}
 
+        # Main A* search loop
         while open_list:
+            # Pop the node with the lowest f-score (g + h)
             f, current = heapq.heappop(open_list)
 
+            # If the goal is reached, reconstruct the path
             if current == self.goal_node:
                 path = []
                 while current in came_from:
                     path.append(current)
                     current = came_from[current]
                 path.append(self.start_node)
-                return path[::-1]
+                return path[::-1]  # Return reversed path from start to goal
 
+            # Explore neighbors of the current node
             for neighbor, cost in graph.get(current, []):
-                tentative_g = g_score[current] + cost
+                tentative_g = g_score[current] + cost  # Calculate tentative g-score
+                # If this path to neighbor is better than any previous one
                 if neighbor not in g_score or tentative_g < g_score[neighbor]:
                     g_score[neighbor] = tentative_g
-                    f_score = tentative_g + self.heuristic(neighbor)
-                    heapq.heappush(open_list, (f_score, neighbor))
-                    came_from[neighbor] = current
+                    f_score = tentative_g + self.heuristic(neighbor)  # f = g + h
+                    heapq.heappush(open_list, (f_score, neighbor))    # Add neighbor to open list
+                    came_from[neighbor] = current                    # Track path
 
+        # If no path is found, return None
         return None
 
 if __name__ == '__main__':
     # Example of usage
-    root_path = "./assignment/dataset/"
+    root_path = "./dataset/"
     sequence = 2
 
     pf = PathFinder(root_path, sequence)
